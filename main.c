@@ -7,6 +7,12 @@
 #include "debug.h"
 #include "vm.h"
 
+#ifdef _WIN32
+#include "dirent.h"
+#else
+#include <dirent.h>
+#endif
+
 static void repl() {
 	char line[1024];
 	for (;;) {
@@ -59,15 +65,49 @@ static void runFile(const char *path) {
 	if (result == INTERPRET_RUNTIME_ERROR) exit(70);
 }
 
+static void runBenchmarks(const char *dirname) {
+	DIR *d;
+	struct dirent *dir;
+	d = opendir(dirname);
+	if (d == NULL) {
+		fprintf(stderr, "Could not open the directory \"%s\".\n", dirname);
+		exit(74);
+	}
+	char buffer[1024];
+	while ((dir = readdir(d)) != NULL) {
+		if (dir->d_type == DT_REG) {
+			size_t len = strlen(dir->d_name);
+			if (len < 5 || strcmp(dir->d_name + (len - 4), ".lox")) continue;
+			printf("Running %s\n", dir->d_name);
+			if (len > 1023) {
+				fprintf(stderr, "Do not support path longer than 1023 bytes and no unicode atm");
+				exit(74);
+			}
+			snprintf(buffer, 1024, "%s\\%s", dirname, dir->d_name);
+			runFile(buffer);
+			printf("\n\n\n\n");
+		}
+	}
+}
+
 int main(int argc, const char* argv[]) {
 	initVM();
 	
 	if (argc == 1) {
 		repl();
 	} else if (argc == 2) {
+		if (!strcmp(argv[1], "-bench")) {
+			fprintf(stderr, "Usage:\nclox [path]\nclox -bench [benchmarkdirname]\n");
+			exit(64);
+		}
 		runFile(argv[1]);
+	} else if (argc == 3) {
+		if (strcmp(argv[1], "-bench")) {
+			fprintf(stderr, "Usage:\nclox [path]\nclox -bench [benchmarkdirname]\n");
+		}
+		runBenchmarks(argv[2]);
 	} else {
-		fprintf(stderr, "Usage: clox [path]\n");
+		fprintf(stderr, "Usage:\nclox [path]\nclox -bench [benchmarkdirname]\n");
 		exit(64);
 	}
 	
